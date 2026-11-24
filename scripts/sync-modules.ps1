@@ -101,6 +101,14 @@ $patches = @(
        Regex = 'script-path=\S*/AntiAd/51job\.js' }
     @{ Name = 'unlock: xjsp video VIP';
        Regex = 'script-path=\S*/xjsp\.js' }
+    # Hupu: blocking goblin.hupu.com outright makes the app fall back to other ad sources.
+    # These are replaced by the "no ads" response rewrites in $ExtraBodyRewrites.
+    @{ Name = 'hupu: goblin domain reject';
+       Regex = '^DOMAIN-SUFFIX,goblin\.hupu\.com,REJECT$' }
+    @{ Name = 'hupu: getOther URL reject';
+       Regex = '^\^https\?:\\/\\/goblin\\\.hupu\\\.com\\/\.\+\\/interfaceAd\\/getOther - reject$' }
+    @{ Name = 'hupu: broken hoopchina image regex';
+       Regex = '^\^https\?:\\/\\/i\\d\\\.hoopchina\\\.com\\\.cn/blogfile\\//d\+' }
 )
 $kept = New-Object System.Collections.Generic.List[string]
 $removed = @{}
@@ -120,6 +128,21 @@ foreach ($p in $patches) {
 if ($missing.Count -gt 0) {
     throw "Patch matched nothing, upstream format may have changed: $($missing -join ', '). Review the upstream file before publishing."
 }
+
+# ---------------------------------------------------------------- 1b. local additions
+# Response rewrites added on top of upstream (no scripts, no network). Inserted right after
+# the [Body Rewrite] header. Source noted per line.
+$ExtraBodyRewrites = @(
+    '# > Hupu (local, after ishowshu/qx hupu.snippet): splash, feed and comment ads'
+    'http-response-jq ^https:\/\/goblin\.hupu\.com\/\d\/\d\.\d\.\d+\/interfaceAd\/getOther ''.ad_code = -41 | .ads = [] | if has("interval") then .interval = 0 else . end'''
+    '# > Hupu (local): recommend tab top banner'
+    'http-response-jq ^https:\/\/games\.mobileapi\.hupu\.com\/\d\/\d\.\d\.\d+\/buffer\/hotList ''.result.topBanner = []'''
+)
+$bodyIdx = -1
+for ($i = 0; $i -lt $kept.Count; $i++) { if ($kept[$i] -match '^\[Body Rewrite\]\s*$') { $bodyIdx = $i; break } }
+if ($bodyIdx -lt 0) { throw 'No [Body Rewrite] section found in upstream module.' }
+$kept.InsertRange($bodyIdx + 1, [string[]]$ExtraBodyRewrites)
+Write-Host "Added $(@($ExtraBodyRewrites | Where-Object { $_ -notmatch '^#' }).Count) local body rewrite(s)"
 
 # ---------------------------------------------------------------- 2. MITM hostname filter
 $sensitiveRules = [ordered]@{
