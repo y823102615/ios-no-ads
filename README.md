@@ -1,12 +1,12 @@
 # ios-no-ads
 
-个人自用的 iOS 去广告配置。工具：Shadowrocket（MITM + 规则）+ 过滤型 DoH，Safari 另加内容拦截器。
+个人自用的 iOS 去广告配置。工具：Shadowrocket（MITM + 规则），DNS 用国内 DoH 只做解析，Safari 另加内容拦截器。
 
 ## 文件
 
 | 文件 | 用途 | 手机上怎么用 |
 |---|---|---|
-| `noads.conf` | 主配置：DoH、QUIC 阻断、广告域名规则集、MITM 开关 | 「配置」页 `+` 填 raw 地址，选中后“使用配置” |
+| `noads.conf` | 主配置：国内 DoH、QUIC 阻断、广告域名规则集、MITM 开关 | 「配置」页 `+` 填 raw 地址，选中后“使用配置” |
 | `modules/blockAds.trimmed.sgmodule` | App 去广告模块，由脚本从 fmz200 生成并加固 | 「配置 → 模块」`+` 填 raw 地址 |
 | `js/*.js` | 模块用到的脚本，固定在本仓库 | 模块自动加载，不用手动添加 |
 | `js/AUDIT.md` | 每次同步的审计报告：移除了哪些解密域名、哪些脚本被停用 | 看一眼即可 |
@@ -92,7 +92,6 @@ powershell -ExecutionPolicy Bypass -File scripts\sync-modules.ps1 -KeepShoppingG
 
 - **MITM 生效：** 在 Shadowrocket 的“最近请求”里，能看到 `app.bilibili.com`、`api.coolapk.com` 等域名的完整请求路径。`acs.m.taobao.com`、`api.m.jd.com` 默认不解密，看不到路径是正常的。
 - **规则命中：** 打开各个 App 时，日志里有 REJECT 记录。
-- **DoH 生效：** 用 NextDNS 时，后台能看到这台手机的查询。
 - **App 效果：** 每个 App 冷启动 3 次没有开屏广告，信息流里刷 50 条没有广告卡片，支付、登录、播放都正常。
 
 ## 排错
