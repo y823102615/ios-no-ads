@@ -1,6 +1,6 @@
 # Module audit
 
-Generated 2026-11-24 10:34:36 from https://raw.githubusercontent.com/fmz200/wool_scripts/main/Shadowrocket/module/blockAds.srmodule. Mode: shopping gateways NOT decrypted.
+Generated 2026-11-24 16:57:54 from https://raw.githubusercontent.com/fmz200/wool_scripts/main/Shadowrocket/module/blockAds.srmodule. Mode: shopping gateways NOT decrypted.
 
 MITM hosts kept: 818. Removed: 146.
 
