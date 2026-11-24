@@ -7,15 +7,51 @@
 | 文件 | 用途 | 手机上怎么用 |
 |---|---|---|
 | `noads.conf` | 主配置：DoH、QUIC 阻断、广告域名规则集、MITM 开关 | 「配置」页 `+` 填 raw 地址，选中后“使用配置” |
-| `modules/blockAds.trimmed.sgmodule` | App 去广告模块，由脚本从 fmz200 生成并裁剪 | 「配置 → 模块」`+` 填 raw 地址 |
-| `scripts/sync-modules.ps1` | 拉取上游模块并打补丁 | 在电脑上运行 |
+| `modules/blockAds.trimmed.sgmodule` | App 去广告模块，由脚本从 fmz200 生成并加固 | 「配置 → 模块」`+` 填 raw 地址 |
+| `js/*.js` | 模块用到的脚本，固定在本仓库 | 模块自动加载，不用手动添加 |
+| `js/AUDIT.md` | 每次同步的审计报告：移除了哪些解密域名、哪些脚本被停用 | 看一眼即可 |
+| `scripts/sync-modules.ps1` | 拉取上游模块、加固、固定脚本 | 在电脑上运行 |
 
 模块上游：[fmz200/wool_scripts blockAds.srmodule](https://github.com/fmz200/wool_scripts/blob/main/Shadowrocket/module/blockAds.srmodule)，覆盖约 730 款 App，包括 B 站、京东、淘宝、酷安和 Apple 广告域名。
 
 脚本对上游做的修改：
 - 删除“安全浏览限制解除”规则。上游会拒绝 Apple、Google、QQ、百度的安全浏览域名，这会关掉 Safari 的欺诈网站警告，和去广告无关。
 - 删除 B 站伪造大会员状态的两条改写（`account/mine`、`account/myinfo`）。
+- 删除上游夹带的付费功能破解：Spotify 高级版、酷我音乐 VIP 和付费歌曲、51job 会员、某视频 App 的会员播放。这些和去广告无关。
 - 补丁一旦匹配不到内容，脚本就报错退出，防止上游改了格式后补丁悄悄失效。
+
+## 安全加固
+
+**1. 敏感域名不解密。** 同步时从模块的 MITM 域名名单里删掉下面这些类别，它们的 HTTPS 流量不会被 Shadowrocket 解密：
+
+| 类别 | 例子 |
+|---|---|
+| 银行、支付、钱包 | 招行、工行、建行、中行、交行、财付通、翼支付、拉卡拉 |
+| 证券、金融、保险、加密货币 | 京东金融、小米金融、同花顺、富途、平安、币安 |
+| 微信安全、账号登录 | `mp.weixin.qq.com`、`weixin110.qq.com`、`sso.*` |
+| 政务、运营商、医疗 | `*.gov.cn`、10086、10010、天翼云、挂号类 |
+| 购物主网关 | 淘宝/闲鱼/优酷 `acs` 网关、`api.m.jd.com`、拼多多、小米商城 |
+| 格式错误或仿冒的域名 | `sdk.alibaba.com.ailbaba.me` |
+
+代价：这些 App 只剩域名层拦截。淘宝、京东的开屏广告大多还能挡，首页信息流和弹窗广告会回来。想换回去广告效果：
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\sync-modules.ps1 -KeepShoppingGatewayMitm
+```
+这样做会解密这些购物网关上的登录、订单、地址请求。
+
+**2. 脚本固定在本仓库。** 模块引用的脚本全部下载到 `js/`，模块改成从本仓库加载。上游作者改代码后，要等你运行同步脚本、看过 `git diff` 并提交，手机上才会用到新代码。
+
+**3. 能联网的脚本默认停用。** 脚本里出现 `$httpClient`、`$task.fetch`、`fetch`、`XMLHttpRequest`、`eval`、`new Function` 时，对应的模块行会被注释掉。只有读过代码、登记在 `sync-modules.ps1` 的 `$ReviewedScripts` 里的才保留，而且登记的是内容的 SHA-256，上游一改就重新停用。目前登记的两个：
+- `bilibili.json.js`：联网代码只在通用封装里，从未调用。
+- `bilibili.protobuf.response.js`：同上。它还有一个“空降助手”功能，会把 B 站播放器的组件包换成作者 GitHub 上的 zip。同步脚本把这个功能的开关改成恒为关闭。
+
+被停用的 `bilibili.protobuf.request.js` 会把你看的视频 ID 发给第三方服务 `bsbsb.top`（SponsorBlock），所以没有放行。B 站的开屏和推荐流广告由不联网的规则和响应改写处理，不受影响。
+
+**这套检查的局限：** 联网 API 扫描是按关键字匹配的，故意混淆的代码可以绕过。真正的保护来自第 2 条：每次更新前看 `git diff`，再决定是否提交。
+
+**使用习惯：**
+- 只用 `noads.conf` 连接。不要在开着 HTTPS 解密时切到带陌生节点的配置。
+- 登录、付款、改密码前，可以先关掉模块或断开 Shadowrocket，用完再开。
 
 ## 首次部署
 
@@ -54,7 +90,7 @@
 
 ## 验证
 
-- **MITM 生效：** 在 Shadowrocket 的“最近请求”里，能看到 `app.bilibili.com`、`api.m.jd.com` 等域名的完整请求路径。
+- **MITM 生效：** 在 Shadowrocket 的“最近请求”里，能看到 `app.bilibili.com`、`api.coolapk.com` 等域名的完整请求路径。`acs.m.taobao.com`、`api.m.jd.com` 默认不解密，看不到路径是正常的。
 - **规则命中：** 打开各个 App 时，日志里有 REJECT 记录。
 - **DoH 生效：** 用 NextDNS 时，后台能看到这台手机的查询。
 - **App 效果：** 每个 App 冷启动 3 次没有开屏广告，信息流里刷 50 条没有广告卡片，支付、登录、播放都正常。
@@ -71,7 +107,7 @@
 
 ## 维护
 
-- 每 2–4 周运行一次 `sync-modules.ps1`，用 `git diff` 看一下上游改了什么，再提交。
+- 每 2–4 周运行一次 `sync-modules.ps1`，用 `git diff` 看一下上游改了什么，尤其是 `js/` 下的脚本和 `js/AUDIT.md`，再提交。如果某个已登记的脚本变成 “changed since review”，读过新代码后更新 `$ReviewedScripts` 里的 SHA-256。
 - 回滚：关掉 Shadowrocket 开关，所有改动立即失效。要彻底清理，再关闭证书信任并删除描述文件。
 
 ## 做不到的部分
